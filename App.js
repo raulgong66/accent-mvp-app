@@ -8,7 +8,7 @@ export default function App() {
   const [isRecording, setIsRecording] = useState(false);
   const [result, setResult] = useState(null);
 
-  const API_URL = 'http://192.168.1.198:8000'; // CAMBIAR POR TU IP/URL
+  const API_URL = 'https://accent-mvp-production.up.railway.app'; // CAMBIAR POR TU IP/URL
 
   const startRecording = async () => {
     try {
