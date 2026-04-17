@@ -1,126 +1,160 @@
-import React, { useState } from "react";
-import { View, Button, Text, StyleSheet, Alert } from "react-native";
-import { Audio } from "expo-av";
-import axios from "axios";
+import React, { useState } from 'react';
+import { View, Button, Text, StyleSheet, Alert, ActivityIndicator } from 'react-native';
+import { Audio } from 'expo-av';
+import axios from 'axios';
 
-export default function Home() {
+const API_URL = 'https://accent-mvp-production.up.railway.app';
 
-    const [recording, setRecording] = useState<Audio.Recording | null>(null);
-    const [isRecording, setIsRecording] = useState(false);
-    const [result, setResult] = useState(null);
+export default function App() {
+  const [recording, setRecording] = useState(null);
+  const [isRecording, setIsRecording] = useState(false);
+  const [result, setResult] = useState(null);
+  const [loading, setLoading] = useState(false);
 
-    const API_URL = "http://192.168.1.198:8000";
+  const startRecording = async () => {
+    try {
+      const permission = await Audio.requestPermissionsAsync();
+      if (!permission.granted) return;
 
-    const startRecording = async () => {
-        try {
+      await Audio.setAudioModeAsync({
+        allowsRecordingIOS: true,
+        playsInSilentModeIOS: true,
+      });
 
-            const permission = await Audio.requestPermissionsAsync();
-            if (!permission.granted) return;
+      const recordingObject = new Audio.Recording();
+      await recordingObject.prepareToRecordAsync(
+        Audio.RecordingOptionsPresets.HIGH_QUALITY
+      );
+      await recordingObject.startAsync();
+      setRecording(recordingObject);
+      setIsRecording(true);
+    } catch (error) {
+      Alert.alert('Error', 'Could not start recording');
+    }
+  };
 
-            await Audio.setAudioModeAsync({
-                allowsRecordingIOS: true,
-                playsInSilentModeIOS: true,
-            });
+  const stopRecording = async () => {
+    try {
+      await recording.stopAndUnloadAsync();
+      const uri = recording.getURI();
+      setIsRecording(false);
+      sendToAPI(uri);
+    } catch (error) {
+      Alert.alert('Error', 'Could not stop recording');
+    }
+  };
 
-            const recordingObject = new Audio.Recording();
+  const sendToAPI = async (audioUri) => {
+    try {
+      setLoading(true);
+      setResult(null);
 
-            await recordingObject.prepareToRecordAsync(
-                Audio.RecordingOptionsPresets.HIGH_QUALITY
-            );
+      const formData = new FormData();
+      formData.append('file', {
+        uri: audioUri,
+        type: 'audio/m4a',
+        name: 'audio.m4a',
+      });
 
-            await recordingObject.startAsync();
+      console.log('Sending audio to:', `${API_URL}/predict`);
 
-            setRecording(recordingObject);
-            setIsRecording(true);
+      const response = await axios.post(`${API_URL}/predict`, formData, {
+        headers: { 'Content-Type': 'multipart/form-data' },
+      });
 
-        } catch (error) {
-            Alert.alert("Error", "No se pudo iniciar grabación");
-        }
-    };
+      console.log('API RESPONSE:', response.data);
 
-    const stopRecording = async () => {
+      // Store full result object { accent, confidence }
+      setResult(response.data);
 
-        if (!recording) return;
+    } catch (error) {
+      console.log(error);
+      Alert.alert('Error', 'Failed to send audio: ' + error.message);
+    } finally {
+      setLoading(false);
+    }
+  };
 
-        await recording.stopAndUnloadAsync();
+  const confidencePercent = result
+    ? `${Math.round(result.confidence * 100)}%`
+    : null;
 
-        const uri = recording.getURI();
+  return (
+    <View style={styles.container}>
+      <Text style={styles.title}>Accent Detector</Text>
 
-        setIsRecording(false);
+      <Button
+        title={isRecording ? 'Recording...' : 'Record Audio'}
+        onPress={isRecording ? stopRecording : startRecording}
+        color={isRecording ? 'red' : 'green'}
+      />
 
-        if (!uri) {
-            Alert.alert("Error", "No se pudo obtener el audio");
-            return;
-        }
-
-        sendToAPI(uri);
-    };
-
-    const sendToAPI = async (audioUri: string) => {
-        try {
-
-            const formData = new FormData();
-
-            if (!recording) return;
-
-            const response = await axios.post(
-                `${API_URL}/predict`,
-                formData,
-                {
-                    headers: {
-                        "Content-Type": "multipart/form-data",
-                    },
-                }
-            );
-
-            console.log("API RESPONSE:", response.data);
-
-            setResult(response.data.accent);
-
-        } catch (error) {
-            console.log(error);
-            Alert.alert("Error", "Error al enviar audio");
-        }
-    };
-
-    return (
-        <View style={styles.container}>
-
-            <Text style={styles.title}>Accent Detector 🎤</Text>
-
-            <Button
-                title={isRecording ? "Detener Grabación" : "Grabar Audio"}
-                onPress={isRecording ? stopRecording : startRecording}
-                color={isRecording ? "red" : "green"}
-            />
-
-            {result && (
-                <Text style={styles.result}>
-                    Acento detectado: {result}
-                </Text>
-            )}
-
+      {loading && (
+        <View style={styles.loadingContainer}>
+          <ActivityIndicator size="large" color="green" />
+          <Text style={styles.loadingText}>Analyzing accent...</Text>
         </View>
-    );
+      )}
+
+      {result && !loading && (
+        <View style={styles.resultContainer}>
+          <Text style={styles.resultAccent}>
+            {result.accent.toUpperCase()}
+          </Text>
+          <Text style={styles.resultConfidence}>
+            Confidence: {confidencePercent}
+          </Text>
+        </View>
+      )}
+
+      {/* Debug — remove before production */}
+      <Text style={styles.debug}>
+        DEBUG: {JSON.stringify(result)}
+      </Text>
+    </View>
+  );
 }
 
 const styles = StyleSheet.create({
-
-    container: {
-        flex: 1,
-        justifyContent: "center",
-        alignItems: "center",
-    },
-
-    title: {
-        fontSize: 24,
-        marginBottom: 20,
-    },
-
-    result: {
-        marginTop: 20,
-        fontSize: 20,
-        color: "green",
-    },
-
+  container: {
+    flex: 1,
+    justifyContent: 'center',
+    alignItems: 'center',
+    backgroundColor: '#fff',
+    padding: 20,
+  },
+  title: {
+    fontSize: 24,
+    fontWeight: 'bold',
+    marginBottom: 30,
+  },
+  loadingContainer: {
+    marginTop: 24,
+    alignItems: 'center',
+    gap: 10,
+  },
+  loadingText: {
+    fontSize: 16,
+    color: '#555',
+  },
+  resultContainer: {
+    marginTop: 24,
+    alignItems: 'center',
+  },
+  resultAccent: {
+    fontSize: 28,
+    fontWeight: 'bold',
+    color: 'green',
+  },
+  resultConfidence: {
+    fontSize: 16,
+    color: '#555',
+    marginTop: 6,
+  },
+  debug: {
+    position: 'absolute',
+    bottom: 20,
+    fontSize: 11,
+    color: '#aaa',
+  },
 });
