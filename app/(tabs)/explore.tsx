@@ -105,8 +105,17 @@ export default function DonateScreen() {
         body: formData,
       });
 
-      const data = await response.json();
-      console.log('Upload result:', data);
+      const responseText = await response.text();
+      console.log('Raw response:', responseText);
+
+      let data;
+      try {
+        data = JSON.parse(responseText);
+      } catch (e) {
+        // If it's not JSON, it's probably an HTML error from PHP
+        Alert.alert("Server Response (HTML)", responseText.substring(0, 200));
+        return;
+      }
 
       if (data && data.success) {
         Alert.alert("¡Gracias!", isSpanish ? "Tu voz ayudará a mejorar el modelo." : "Your voice successfully uploaded.");
