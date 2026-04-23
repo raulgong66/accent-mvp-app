@@ -1,200 +1,238 @@
-import React, { useState } from "react";
-import { View, Button, Text, StyleSheet, Alert, ActivityIndicator } from "react-native";
-import { Audio } from "expo-av";
-import axios from "axios";
+import React, { useState } from 'react';
+import { View, Text, StyleSheet, Alert, ActivityIndicator, TouchableOpacity, SafeAreaView, StatusBar } from 'react-native';
+import { Audio } from 'expo-av';
+import axios from 'axios';
 
-const API_URL = "https://accent-mvp-production.up.railway.app";
+const API_URL = 'https://accent-mvp.onrender.com';
 
-const ACCENT_FLAGS: Record<string, string> = {
-    cuba: "🇨🇺",
-    mexico: "🇲🇽",
-    argentina: "🇦🇷",
-    chile: "🇨🇱",
-    colombia: "🇨🇴",
-    "puerto rico": "🇵🇷",
-    dominicana: "🇩🇴",
-    venezuela: "🇻🇪",
-    uruguay: "🇺🇾",
-    guatemala: "🇬🇹",
+const FLAGS: Record<string, string> = {
+  mexico: "🇲🇽", argentina: "🇦🇷", chile: "🇨🇱", colombia: "🇨🇴", peru: "🇵🇪",
+  spain: "🇪🇸", usa: "🇺🇸", puerto_rico: "🇵🇷", dominican_republic: "🇩🇴",
+  venezuela: "🇻🇪", ecuador: "🇪🇨", panama: "🇵🇦", el_salvador: "🇸🇻",
+  bolivia: "🇧🇴", uruguay: "🇺🇾", paraguay: "🇵🇾", guatemala: "🇬🇹",
+  honduras: "🇭🇳", nicaragua: "🇳🇮", costa_rica: "🇨🇷", cuba: "🇨🇺"
 };
 
 export default function Home() {
-    const [recording, setRecording] = useState<Audio.Recording | null>(null);
-    const [isRecording, setIsRecording] = useState(false);
-    const [result, setResult] = useState<{ accent: string; confidence: number } | null>(null);
-    const [loading, setLoading] = useState(false);
+  const [recording, setRecording] = useState<Audio.Recording | null>(null);
+  const [isRecording, setIsRecording] = useState(false);
+  const [result, setResult] = useState<{ accent: string; confidence: number } | null>(null);
+  const [loading, setLoading] = useState(false);
+  const [isSpanish, setIsSpanish] = useState(true);
 
-    const startRecording = async () => {
-        try {
-            const permission = await Audio.requestPermissionsAsync();
-            if (!permission.granted) return;
+  const startRecording = async () => {
+    try {
+      const permission = await Audio.requestPermissionsAsync();
+      if (!permission.granted) {
+          Alert.alert("Permission", "Microphone permission is required");
+          return;
+      }
 
-            await Audio.setAudioModeAsync({
-                allowsRecordingIOS: true,
-                playsInSilentModeIOS: true,
-            });
+      await Audio.setAudioModeAsync({
+        allowsRecordingIOS: true,
+        playsInSilentModeIOS: true,
+      });
 
-            const recordingObject = new Audio.Recording();
-            await recordingObject.prepareToRecordAsync(
-                Audio.RecordingOptionsPresets.HIGH_QUALITY
-            );
-            await recordingObject.startAsync();
-            setRecording(recordingObject);
-            setIsRecording(true);
-        } catch (error) {
-            Alert.alert("Error", "Could not start recording");
-        }
-    };
+      const { recording: recordingObject } = await Audio.Recording.createAsync(
+        Audio.RecordingOptionsPresets.HIGH_QUALITY
+      );
+      setRecording(recordingObject);
+      setIsRecording(true);
+    } catch (error) {
+      Alert.alert('Error', isSpanish ? 'No se pudo iniciar la grabación' : 'Could not start recording');
+    }
+  };
 
-    const stopRecording = async () => {
-        if (!recording) return;
-        await recording.stopAndUnloadAsync();
-        const uri = recording.getURI();
-        setIsRecording(false);
-        if (!uri) {
-            Alert.alert("Error", "Could not get audio URI");
-            return;
-        }
-        sendToAPI(uri);
-    };
+  const stopRecording = async () => {
+    if (!recording) return;
+    try {
+      setIsRecording(false);
+      await recording.stopAndUnloadAsync();
+      const uri = recording.getURI();
+      if (uri) sendToAPI(uri);
+    } catch (error) {
+      Alert.alert('Error', isSpanish ? 'No se pudo detener la grabación' : 'Could not stop recording');
+    }
+  };
 
-    const sendToAPI = async (audioUri: string) => {
-        try {
-            setLoading(true);
-            setResult(null);
+  const sendToAPI = async (audioUri: string) => {
+    try {
+      setLoading(true);
+      setResult(null);
 
-            const formData = new FormData();
-            formData.append("file", {
-                uri: audioUri,
-                type: "audio/m4a",
-                name: "audio.m4a",
-            } as any);
+      const formData = new FormData();
+      formData.append('file', {
+        uri: audioUri,
+        type: 'audio/m4a',
+        name: 'audio.m4a',
+      } as any);
 
-            console.log("Sending audio to:", `${API_URL}/predict`);
+      const response = await axios.post(`${API_URL}/predict`, formData, {
+        headers: { 'Content-Type': 'multipart/form-data' },
+      });
 
-            const response = await axios.post(`${API_URL}/predict`, formData, {
-                headers: { "Content-Type": "multipart/form-data" },
-            });
+      setResult(response.data);
 
-            console.log("API RESPONSE:", response.data);
-            setResult(response.data);
+    } catch (error: any) {
+      Alert.alert('Error', (isSpanish ? 'Error de conexión: ' : 'Connection error: ') + error.message);
+    } finally {
+      setLoading(false);
+    }
+  };
 
-        } catch (error) {
-            console.log("AXIOS ERROR:", error);
-            Alert.alert("Error", "Failed to send audio");
-        } finally {
-            setLoading(false);
-        }
-    };
+  const formatAccentName = (name: string) => {
+    if (!name) return "";
+    const key = name.toLowerCase();
+    
+    if (key === "dominican_republic") {
+      return isSpanish ? "República Dominicana" : "Dominican Republic";
+    }
 
-    const confidencePercent = result
-        ? `${Math.round(result.confidence * 100)}%`
-        : null;
+    return name
+      .split('_')
+      .map(word => word.charAt(0).toUpperCase() + word.slice(1))
+      .join(' ');
+  };
 
-    const flag = result
-        ? (ACCENT_FLAGS[result.accent.toLowerCase()] ?? "🏳️")
-        : null;
+  return (
+    <SafeAreaView style={styles.container}>
+      <StatusBar barStyle="light-content" />
+      
+      <TouchableOpacity 
+        style={styles.langSwitch} 
+        onPress={() => setIsSpanish(!isSpanish)}
+      >
+        <Text style={styles.langText}>{isSpanish ? "🇺🇸 EN" : "🇪🇸 ES"}</Text>
+      </TouchableOpacity>
 
-    return (
-        <View style={styles.container}>
-            <Text style={styles.title}>Accent Detector 🎤</Text>
-            <Text style={styles.subtitle}>Speak for a few seconds</Text>
+      <Text style={styles.title}>
+        {isSpanish ? "Analizador de Voz" : "Voice Analyzer"}
+      </Text>
 
-            <View style={styles.buttonWrapper}>
-                <Button
-                    title={isRecording ? "Stop Recording" : "Record Audio"}
-                    onPress={isRecording ? stopRecording : startRecording}
-                    color={isRecording ? "#ff4d4d" : "#1DB954"}
-                />
-            </View>
+      <TouchableOpacity 
+        style={[styles.recordBtn, isRecording && styles.recordingActive]} 
+        onPress={isRecording ? stopRecording : startRecording}
+      >
+        <Text style={styles.micIcon}>🎙</Text>
+      </TouchableOpacity>
 
-            {loading && (
-                <View style={styles.loadingContainer}>
-                    <ActivityIndicator size="large" color="#1DB954" />
-                    <Text style={styles.loadingText}>Analyzing accent...</Text>
-                </View>
-            )}
+      <Text style={styles.statusText}>
+        {isRecording 
+          ? (isSpanish ? "Escuchando..." : "Listening...") 
+          : (isSpanish ? "Toca para detectar acento" : "Tap to detect accent")}
+      </Text>
 
-            {result && !loading && (
-                <View style={styles.resultContainer}>
-                    <Text style={styles.resultFlag}>{flag}</Text>
-                    <Text style={styles.resultAccent}>
-                        {result.accent.toUpperCase()}
-                    </Text>
-                    <Text style={styles.resultConfidence}>
-                        Confidence: {confidencePercent}
-                    </Text>
-                </View>
-            )}
-
-            {/* Debug — remove before production */}
-            <Text style={styles.debug}>
-                DEBUG: {JSON.stringify(result)}
-            </Text>
+      {loading && (
+        <View style={styles.infoContainer}>
+          <ActivityIndicator size="large" color="#4ade80" />
+          <Text style={styles.infoText}>
+            {isSpanish ? "Analizando..." : "Analyzing..."}
+          </Text>
         </View>
-    );
+      )}
+
+      {result && !loading && (
+        <View style={styles.resultContainer}>
+          <Text style={styles.resultFlag}>{FLAGS[result.accent.toLowerCase()] || "🌎"}</Text>
+          <Text style={styles.resultAccent}>
+            {formatAccentName(result.accent)}
+          </Text>
+          <Text style={styles.resultConfidence}>
+            {isSpanish ? "Precisión" : "Confidence"}: {Math.round(result.confidence * 100)}%
+          </Text>
+        </View>
+      )}
+
+    </SafeAreaView>
+  );
 }
 
 const styles = StyleSheet.create({
-    container: {
-        flex: 1,
-        justifyContent: "center",
-        alignItems: "center",
-        backgroundColor: "#0e0e10",
-        padding: 20,
-    },
-    title: {
-        fontSize: 26,
-        fontWeight: "bold",
-        color: "#e8e6e0",
-        marginBottom: 6,
-    },
-    subtitle: {
-        fontSize: 14,
-        color: "#888780",
-        marginBottom: 36,
-    },
-    buttonWrapper: {
-        width: 200,
-    },
-    loadingContainer: {
-        marginTop: 32,
-        alignItems: "center",
-        gap: 12,
-    },
-    loadingText: {
-        fontSize: 15,
-        color: "#888780",
-    },
-    resultContainer: {
-        marginTop: 36,
-        alignItems: "center",
-        backgroundColor: "#18181c",
-        borderRadius: 16,
-        paddingVertical: 24,
-        paddingHorizontal: 40,
-        borderWidth: 1,
-        borderColor: "#2a2a30",
-    },
-    resultFlag: {
-        fontSize: 64,
-        marginBottom: 8,
-    },
-    resultAccent: {
-        fontSize: 32,
-        fontWeight: "bold",
-        color: "#1DB954",
-        letterSpacing: 2,
-    },
-    resultConfidence: {
-        fontSize: 15,
-        color: "#1DB954",
-        marginTop: 8,
-    },
-    debug: {
-        position: "absolute",
-        bottom: 20,
-        fontSize: 11,
-        color: "#444",
-    },
+  container: {
+    flex: 1,
+    backgroundColor: '#0a1128', // Dark background to match PWA
+    alignItems: 'center',
+    paddingTop: 40,
+  },
+  langSwitch: {
+    position: 'absolute',
+    top: 60,
+    right: 20,
+    backgroundColor: 'rgba(255,255,255,0.1)',
+    paddingVertical: 8,
+    paddingHorizontal: 15,
+    borderRadius: 20,
+  },
+  langText: {
+    color: '#fff',
+    fontSize: 14,
+    fontWeight: 'bold',
+  },
+  title: {
+    fontSize: 28,
+    fontWeight: 'bold',
+    color: '#fff',
+    marginTop: 100,
+    marginBottom: 60,
+  },
+  recordBtn: {
+    width: 140,
+    height: 140,
+    borderRadius: 70,
+    backgroundColor: '#4ade80',
+    justifyContent: 'center',
+    alignItems: 'center',
+    elevation: 8,
+    shadowColor: '#4ade80',
+    shadowOffset: { width: 0, height: 0 },
+    shadowOpacity: 0.4,
+    shadowRadius: 20,
+  },
+  recordingActive: {
+    backgroundColor: '#ff4444',
+    shadowColor: '#ff4444',
+    transform: [{ scale: 1.1 }],
+  },
+  micIcon: {
+    fontSize: 60,
+  },
+  statusText: {
+    color: '#aaa',
+    marginTop: 30,
+    fontSize: 16,
+  },
+  infoContainer: {
+    marginTop: 40,
+    alignItems: 'center',
+  },
+  infoText: {
+    color: '#fff',
+    marginTop: 10,
+    fontSize: 18,
+  },
+  resultContainer: {
+    marginTop: 40,
+    padding: 25,
+    backgroundColor: 'rgba(255,255,255,0.05)',
+    borderRadius: 25,
+    alignItems: 'center',
+    width: '85%',
+    borderWidth: 1,
+    borderColor: 'rgba(255,255,255,0.1)',
+  },
+  resultFlag: {
+    fontSize: 50,
+    marginBottom: 10,
+  },
+  resultAccent: {
+    fontSize: 26,
+    fontWeight: 'bold',
+    color: '#fff',
+    textAlign: 'center',
+  },
+  resultConfidence: {
+    fontSize: 16,
+    color: '#4ade80',
+    marginTop: 12,
+  },
 });

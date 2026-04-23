@@ -1,112 +1,238 @@
-import { Image } from 'expo-image';
-import { Platform, StyleSheet } from 'react-native';
+import React, { useState } from 'react';
+import { View, Text, StyleSheet, TouchableOpacity, ScrollView, Alert, ActivityIndicator, SafeAreaView, Dimensions } from 'react-native';
+import { Audio } from 'expo-av';
+import axios from 'axios';
 
-import { Collapsible } from '@/components/ui/collapsible';
-import { ExternalLink } from '@/components/external-link';
-import ParallaxScrollView from '@/components/parallax-scroll-view';
-import { ThemedText } from '@/components/themed-text';
-import { ThemedView } from '@/components/themed-view';
-import { IconSymbol } from '@/components/ui/icon-symbol';
-import { Fonts } from '@/constants/theme';
+const API_URL = 'https://accent-mvp.onrender.com';
+const DONATION_DURATION = 20000; // 20 seconds
 
-export default function TabTwoScreen() {
+const COUNTRIES = [
+  { id: 'dominican_republic', name: 'República Dominicana', flag: '🇩🇴' },
+  { id: 'venezuela', name: 'Venezuela', flag: '🇻🇪' },
+  { id: 'mexico', name: 'México', flag: '🇲🇽' },
+  { id: 'puerto_rico', name: 'Puerto Rico', flag: '🇵🇷' },
+  { id: 'cuba', name: 'Cuba', flag: '🇨🇺' },
+  { id: 'colombia', name: 'Colombia', flag: '🇨🇴' },
+  { id: 'spain', name: 'España', flag: '🇪🇸' },
+  { id: 'argentina', name: 'Argentina', flag: '🇦🇷' },
+  { id: 'chile', name: 'Chile', flag: '🇨🇱' },
+];
+
+export default function DonateScreen() {
+  const [selectedCountry, setSelectedCountry] = useState<string | null>(null);
+  const [recording, setRecording] = useState<Audio.Recording | null>(null);
+  const [isRecording, setIsRecording] = useState(false);
+  const [isUploading, setIsUploading] = useState(false);
+  const [isSpanish, setIsSpanish] = useState(true);
+
+  const startDonationRecording = async () => {
+    if (!selectedCountry) {
+      Alert.alert("Atención", isSpanish ? "Selecciona un país primero" : "Select a country first");
+      return;
+    }
+
+    try {
+      const { status } = await Audio.requestPermissionsAsync();
+      if (status !== 'granted') return;
+
+      await Audio.setAudioModeAsync({ allowsRecordingIOS: true, playsInSilentModeIOS: true });
+
+      const { recording: recordingObject } = await Audio.Recording.createAsync(
+        Audio.RecordingOptionsPresets.HIGH_QUALITY
+      );
+      
+      setRecording(recordingObject);
+      setIsRecording(true);
+
+      // Auto-stop after 20s
+      setTimeout(() => {
+        setIsRecording(prev => {
+          if (prev) stopAndSend();
+          return false;
+        });
+      }, DONATION_DURATION);
+
+    } catch (err) {
+      Alert.alert("Error", "Could not start recording");
+    }
+  };
+
+  const stopAndSend = async () => {
+    if (!recording) return;
+    setIsRecording(false);
+    
+    try {
+      await recording.stopAndUnloadAsync();
+      const uri = recording.getURI();
+      if (uri) uploadAudio(uri);
+    } catch (err) {
+      console.error(err);
+    }
+  };
+
+  const uploadAudio = async (uri: string) => {
+    setIsUploading(true);
+    try {
+      const formData = new FormData();
+      formData.append('file', {
+        uri,
+        type: 'audio/m4a',
+        name: `donation_${selectedCountry}.m4a`,
+      } as any);
+      formData.append('country', selectedCountry!);
+
+      await axios.post(`${API_URL}/donate-audio`, formData, {
+        headers: { 'Content-Type': 'multipart/form-data' },
+      });
+
+      Alert.alert("¡Gracias!", isSpanish ? "Tu voz ayudará a mejorar el modelo." : "Your voice will help improve the model.");
+    } catch (err) {
+      Alert.alert("Error", "Upload failed");
+    } finally {
+      setIsUploading(false);
+    }
+  };
+
   return (
-    <ParallaxScrollView
-      headerBackgroundColor={{ light: '#D0D0D0', dark: '#353636' }}
-      headerImage={
-        <IconSymbol
-          size={310}
-          color="#808080"
-          name="chevron.left.forwardslash.chevron.right"
-          style={styles.headerImage}
-        />
-      }>
-      <ThemedView style={styles.titleContainer}>
-        <ThemedText
-          type="title"
-          style={{
-            fontFamily: Fonts.rounded,
-          }}>
-          Explore
-        </ThemedText>
-      </ThemedView>
-      <ThemedText>This app includes example code to help you get started.</ThemedText>
-      <Collapsible title="File-based routing">
-        <ThemedText>
-          This app has two screens:{' '}
-          <ThemedText type="defaultSemiBold">app/(tabs)/index.tsx</ThemedText> and{' '}
-          <ThemedText type="defaultSemiBold">app/(tabs)/explore.tsx</ThemedText>
-        </ThemedText>
-        <ThemedText>
-          The layout file in <ThemedText type="defaultSemiBold">app/(tabs)/_layout.tsx</ThemedText>{' '}
-          sets up the tab navigator.
-        </ThemedText>
-        <ExternalLink href="https://docs.expo.dev/router/introduction">
-          <ThemedText type="link">Learn more</ThemedText>
-        </ExternalLink>
-      </Collapsible>
-      <Collapsible title="Android, iOS, and web support">
-        <ThemedText>
-          You can open this project on Android, iOS, and the web. To open the web version, press{' '}
-          <ThemedText type="defaultSemiBold">w</ThemedText> in the terminal running this project.
-        </ThemedText>
-      </Collapsible>
-      <Collapsible title="Images">
-        <ThemedText>
-          For static images, you can use the <ThemedText type="defaultSemiBold">@2x</ThemedText> and{' '}
-          <ThemedText type="defaultSemiBold">@3x</ThemedText> suffixes to provide files for
-          different screen densities
-        </ThemedText>
-        <Image
-          source={require('@/assets/images/react-logo.png')}
-          style={{ width: 100, height: 100, alignSelf: 'center' }}
-        />
-        <ExternalLink href="https://reactnative.dev/docs/images">
-          <ThemedText type="link">Learn more</ThemedText>
-        </ExternalLink>
-      </Collapsible>
-      <Collapsible title="Light and dark mode components">
-        <ThemedText>
-          This template has light and dark mode support. The{' '}
-          <ThemedText type="defaultSemiBold">useColorScheme()</ThemedText> hook lets you inspect
-          what the user&apos;s current color scheme is, and so you can adjust UI colors accordingly.
-        </ThemedText>
-        <ExternalLink href="https://docs.expo.dev/develop/user-interface/color-themes/">
-          <ThemedText type="link">Learn more</ThemedText>
-        </ExternalLink>
-      </Collapsible>
-      <Collapsible title="Animations">
-        <ThemedText>
-          This template includes an example of an animated component. The{' '}
-          <ThemedText type="defaultSemiBold">components/HelloWave.tsx</ThemedText> component uses
-          the powerful{' '}
-          <ThemedText type="defaultSemiBold" style={{ fontFamily: Fonts.mono }}>
-            react-native-reanimated
-          </ThemedText>{' '}
-          library to create a waving hand animation.
-        </ThemedText>
-        {Platform.select({
-          ios: (
-            <ThemedText>
-              The <ThemedText type="defaultSemiBold">components/ParallaxScrollView.tsx</ThemedText>{' '}
-              component provides a parallax effect for the header image.
-            </ThemedText>
-          ),
-        })}
-      </Collapsible>
-    </ParallaxScrollView>
+    <SafeAreaView style={styles.container}>
+      <ScrollView contentContainerStyle={styles.scrollContent}>
+        
+        <Text style={styles.header}>
+          {isSpanish ? "Ayúdanos a Mejorar" : "Help Us Improve"}
+        </Text>
+        
+        <Text style={styles.instruction}>
+          {isSpanish 
+            ? "Menciona tu edad, ciudad y dispositivo durante la grabación de 20s." 
+            : "State your age, city and device during the 20s recording."}
+        </Text>
+
+        <Text style={styles.sectionTitle}>
+          {isSpanish ? "1. Selecciona tu país" : "1. Select your country"}
+        </Text>
+
+        <View style={styles.grid}>
+          {COUNTRIES.map((c) => (
+            <TouchableOpacity 
+              key={c.id} 
+              style={[styles.countryCard, selectedCountry === c.id && styles.selectedCard]}
+              onPress={() => setSelectedCountry(c.id)}
+            >
+              <Text style={styles.flagIcon}>{c.flag}</Text>
+              <Text style={styles.countryName}>{c.name}</Text>
+            </TouchableOpacity>
+          ))}
+        </View>
+
+        <View style={styles.actionSection}>
+          {isUploading ? (
+            <ActivityIndicator size="large" color="#4ade80" />
+          ) : (
+            <>
+              <TouchableOpacity 
+                style={[styles.donateBtn, isRecording && styles.recordingBtn]} 
+                onPress={isRecording ? stopAndSend : startDonationRecording}
+              >
+                <Text style={styles.donateBtnText}>
+                  {isRecording 
+                    ? (isSpanish ? "Detener (20s máx)" : "Stop (20s max)") 
+                    : (isSpanish ? "🎙 Grabar Donación" : "🎙 Record Donation")}
+                </Text>
+              </TouchableOpacity>
+              {isRecording && <Text style={styles.timerText}>{isSpanish ? "Grabando clip de 20s..." : "Recording 20s clip..."}</Text>}
+            </>
+          )}
+        </View>
+
+      </ScrollView>
+    </SafeAreaView>
   );
 }
 
 const styles = StyleSheet.create({
-  headerImage: {
-    color: '#808080',
-    bottom: -90,
-    left: -35,
-    position: 'absolute',
+  container: {
+    flex: 1,
+    backgroundColor: '#0a1128',
   },
-  titleContainer: {
+  scrollContent: {
+    padding: 24,
+    alignItems: 'center',
+  },
+  header: {
+    fontSize: 28,
+    fontWeight: 'bold',
+    color: '#fff',
+    marginTop: 20,
+    marginBottom: 10,
+  },
+  instruction: {
+    color: '#aaa',
+    textAlign: 'center',
+    marginBottom: 30,
+    fontSize: 16,
+    lineHeight: 22,
+  },
+  sectionTitle: {
+    alignSelf: 'flex-start',
+    color: '#4ade80',
+    fontSize: 18,
+    fontWeight: '600',
+    marginBottom: 15,
+  },
+  grid: {
     flexDirection: 'row',
-    gap: 8,
+    flexWrap: 'wrap',
+    justifyContent: 'space-between',
+    width: '100%',
   },
+  countryCard: {
+    width: (Dimensions.get('window').width / 2) - 35,
+    backgroundColor: 'rgba(255,255,255,0.05)',
+    padding: 15,
+    borderRadius: 15,
+    marginBottom: 15,
+    alignItems: 'center',
+    borderWidth: 1,
+    borderColor: 'transparent',
+  },
+  selectedCard: {
+    borderColor: '#4ade80',
+    backgroundColor: 'rgba(74, 222, 128, 0.1)',
+  },
+  flagIcon: {
+    fontSize: 30,
+    marginBottom: 5,
+  },
+  countryName: {
+    color: '#fff',
+    fontSize: 12,
+    fontWeight: '500',
+    textAlign: 'center',
+  },
+  actionSection: {
+    marginTop: 30,
+    alignItems: 'center',
+    width: '100%',
+  },
+  donateBtn: {
+    backgroundColor: '#4ade80',
+    paddingVertical: 18,
+    paddingHorizontal: 40,
+    borderRadius: 30,
+    width: '100%',
+    alignItems: 'center',
+  },
+  recordingBtn: {
+    backgroundColor: '#ff4444',
+  },
+  donateBtnText: {
+    color: '#0a1128',
+    fontSize: 18,
+    fontWeight: 'bold',
+  },
+  timerText: {
+    color: '#ff4444',
+    marginTop: 15,
+    fontWeight: 'bold',
+  }
 });
