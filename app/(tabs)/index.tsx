@@ -38,6 +38,14 @@ export default function Home() {
       );
       setRecording(recordingObject);
       setIsRecording(true);
+
+      // Auto-stop after 10s for prediction
+      setTimeout(() => {
+        setIsRecording(prev => {
+          if (prev) stopRecording();
+          return false;
+        });
+      }, 10000);
     } catch (error) {
       Alert.alert('Error', isSpanish ? 'No se pudo iniciar la grabación' : 'Could not start recording');
     }
@@ -106,7 +114,7 @@ export default function Home() {
       </TouchableOpacity>
 
       <Text style={styles.title}>
-        {isSpanish ? "Analizador de Voz" : "Voice Analyzer"}
+        {isSpanish ? "Accent Detective" : "Accent Detective"}
       </Text>
 
       <TouchableOpacity 

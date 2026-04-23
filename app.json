@@ -1,7 +1,7 @@
 {
   "expo": {
-    "name": "accent-mvp-app",
-    "slug": "accent-mvp-app",
+    "name": "Accent Detective",
+    "slug": "accent-detective",
     "version": "1.0.0",
     "orientation": "portrait",
     "icon": "./assets/images/icon.png",
