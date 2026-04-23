@@ -87,21 +87,41 @@ export default function DonateScreen() {
     setIsUploading(true);
     try {
       const formData = new FormData();
-      formData.append('audio', {
-        uri,
+      
+      // Using a more generic object for the file to satisfy legacy server parsers
+      const fileData = {
+        uri: uri,
         type: 'audio/m4a',
-        name: `donation_${selectedCountry}.m4a`,
-      } as any);
+        name: 'donation.m4a',
+      };
+
+      formData.append('audio', fileData as any);
       formData.append('country', selectedCountry!);
 
-      // Pointing to your main hosting on Simply.com
-      await axios.post('https://dulcecare.se/upload.php', formData, {
-        headers: { 'Content-Type': 'multipart/form-data' },
+      console.log('Donating to Simply.com/upload.php...');
+
+      const response = await axios({
+        method: 'post',
+        url: 'https://dulcecare.se/upload.php',
+        data: formData,
+        headers: {
+          'Content-Type': 'multipart/form-data',
+        },
+        timeout: 30000, // 30 seconds
       });
 
-      Alert.alert("¡Gracias!", isSpanish ? "Tu voz ayudará a mejorar el modelo." : "Your voice will help improve the model.");
-    } catch (err) {
-      Alert.alert("Error", "Upload failed. Please check your internet connection.");
+      console.log('Upload result:', response.data);
+
+      if (response.data && response.data.success) {
+        Alert.alert("¡Gracias!", isSpanish ? "Tu voz ayudará a mejorar el modelo." : "Your voice successfully uploaded.");
+      } else {
+        Alert.alert("Server Error", response.data.error || "Unknown server error");
+      }
+
+    } catch (err: any) {
+      console.error(err);
+      const errorMsg = err.response ? `Error ${err.response.status}: ${JSON.stringify(err.response.data)}` : err.message;
+      Alert.alert("Upload Error", errorMsg);
     } finally {
       setIsUploading(false);
     }
