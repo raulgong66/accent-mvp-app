@@ -100,28 +100,23 @@ export default function DonateScreen() {
 
       console.log('Donating to Simply.com/upload.php...');
 
-      const response = await axios({
-        method: 'post',
-        url: 'https://dulcecare.se/upload.php',
-        data: formData,
-        headers: {
-          'Content-Type': 'multipart/form-data',
-        },
-        timeout: 30000, // 30 seconds
+      const response = await fetch('https://dulcecare.se/upload.php', {
+        method: 'POST',
+        body: formData,
       });
 
-      console.log('Upload result:', response.data);
+      const data = await response.json();
+      console.log('Upload result:', data);
 
-      if (response.data && response.data.success) {
+      if (data && data.success) {
         Alert.alert("¡Gracias!", isSpanish ? "Tu voz ayudará a mejorar el modelo." : "Your voice successfully uploaded.");
       } else {
-        Alert.alert("Server Error", response.data.error || "Unknown server error");
+        Alert.alert("Server Error", data.error || "Unknown server error");
       }
 
     } catch (err: any) {
-      console.error(err);
-      const errorMsg = err.response ? `Error ${err.response.status}: ${JSON.stringify(err.response.data)}` : err.message;
-      Alert.alert("Upload Error", errorMsg);
+      console.error("DEBUG:", err);
+      Alert.alert("Upload Error", err.message || "Network request failed");
     } finally {
       setIsUploading(false);
     }
