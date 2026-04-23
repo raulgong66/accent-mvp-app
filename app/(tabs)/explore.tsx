@@ -16,6 +16,19 @@ const COUNTRIES = [
   { id: 'spain', name: 'España', flag: '🇪🇸' },
   { id: 'argentina', name: 'Argentina', flag: '🇦🇷' },
   { id: 'chile', name: 'Chile', flag: '🇨🇱' },
+  { id: 'peru', name: 'Perú', flag: '🇵🇪' },
+  { id: 'ecuador', name: 'Ecuador', flag: '🇪🇨' },
+  { id: 'guatemala', name: 'Guatemala', flag: '🇬🇹' },
+  { id: 'bolivia', name: 'Bolivia', flag: '🇧🇴' },
+  { id: 'honduras', name: 'Honduras', flag: '🇭🇳' },
+  { id: 'paraguay', name: 'Paraguay', flag: '🇵🇾' },
+  { id: 'el_salvador', name: 'El Salvador', flag: '🇸🇻' },
+  { id: 'nicaragua', name: 'Nicaragua', flag: '🇳🇮' },
+  { id: 'costa_rica', name: 'Costa Rica', flag: '🇨🇷' },
+  { id: 'panama', name: 'Panamá', flag: '🇵🇦' },
+  { id: 'uruguay', name: 'Uruguay', flag: '🇺🇾' },
+  { id: 'equatorial_guinea', name: 'Guinea Ecuatorial', flag: '🇬🇶' },
+  { id: 'usa', name: 'USA (Hispano)', flag: '🇺🇸' },
 ];
 
 export default function DonateScreen() {
@@ -74,20 +87,21 @@ export default function DonateScreen() {
     setIsUploading(true);
     try {
       const formData = new FormData();
-      formData.append('file', {
+      formData.append('audio', {
         uri,
         type: 'audio/m4a',
         name: `donation_${selectedCountry}.m4a`,
       } as any);
       formData.append('country', selectedCountry!);
 
-      await axios.post(`${API_URL}/donate-audio`, formData, {
+      // Pointing to your main hosting on Simply.com
+      await axios.post('https://dulcecare.se/upload.php', formData, {
         headers: { 'Content-Type': 'multipart/form-data' },
       });
 
       Alert.alert("¡Gracias!", isSpanish ? "Tu voz ayudará a mejorar el modelo." : "Your voice will help improve the model.");
     } catch (err) {
-      Alert.alert("Error", "Upload failed");
+      Alert.alert("Error", "Upload failed. Please check your internet connection.");
     } finally {
       setIsUploading(false);
     }
